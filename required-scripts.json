@@ -15,6 +15,7 @@
   ],
   "remove": [
     "OldScript.ps1",
-    "UnnecessaryScript.ps1"
+    "UnnecessaryScript.ps1",
+    "TestScript.ps1"
   ]
 }
