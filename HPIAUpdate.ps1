@@ -1,4 +1,4 @@
-﻿# Versie: 1.0.0
+﻿# Versie: 2.0.0
         # Definieer de logbestand locatie
         $logPath = 'C:/hpia/hpia_install_log.txt'
 
