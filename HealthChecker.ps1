@@ -1,4 +1,4 @@
-# Versie: 1.0.0
+# Versie: 3.0.0
 
 $scriptName = "HealthChecker.ps1"
 $tempScriptName = "HealthChecker_new.ps1"
