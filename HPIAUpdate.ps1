@@ -1,6 +1,6 @@
 # Versie: 2.2.0
-
-# Definieer de logbestand locatie
+            
+        # Definieer de logbestand locatie
         $logPath = 'C:/hpia/hpia_install_log.txt'
 
         # Zorg ervoor dat de hpia map en het logbestand bestaan
@@ -48,7 +48,7 @@
 
         $installedVersion = $null
 
-        # Controleer de geïnstalleerde versie
+        # Controleer de geinstalleerde versie
         $installedExe = Get-ChildItem -Path $hpiaDirectory -Filter 'HPImageAssistant.exe' -File | Select-Object -First 1
         if ($null -ne $installedExe) {
             $installedVersionInfo = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($installedExe.FullName)
@@ -56,12 +56,12 @@
 
             if ($installedVersionFull -match '(\d+\.\d+\.\d+)') {
                 $installedVersion = $matches[1]
-                Write-Log "Geïnstalleerde versie gevonden: $installedVersion"
+                Write-Log "Geinstalleerde versie gevonden: $installedVersion"
             }
         }
 
         if ($installedVersion -and ([version]$installedVersion -ge [version]$latestVersion)) {
-            Write-Log "De geïnstalleerde versie van HPIA ($installedVersion) is up-to-date. Geen actie vereist."
+            Write-Log "De geinstalleerde versie van HPIA ($installedVersion) is up-to-date. Geen actie vereist."
             exit 0
         }
         else {
@@ -74,7 +74,7 @@
 
             $installCommand = "& `"$downloadPath`" /s /e /f c:\hpia"
             Invoke-Expression $installCommand
-            Write-Log 'Nieuwe versie van HPIA geïnstalleerd.'
+            Write-Log 'Nieuwe versie van HPIA geinstalleerd.'
 
             Remove-Item -Path $downloadPath -Force
             Write-Log 'Tijdelijk installatiebestand verwijderd.'
