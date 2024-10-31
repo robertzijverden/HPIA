@@ -1,4 +1,4 @@
-# Versie: 1.2.2
+# Versie: 2.3.0
 
 param (
     [string]$logPath = 'C:\ProgramData\AutoUpdate\HPIA\HealthCheck.log',
@@ -17,10 +17,9 @@ function Write-Log {
 
     $dateTime = Get-Date -Format 'yyyy-MM-dd,HH:mm:ss'
     $logEntry = "$dateTime,$Level,HealthCheck,$Message"
-    Add-Content -Path $logPath -Value $logEntry  # Alleen het logbericht wordt hier weggeschreven
+    Add-Content -Path $logPath -Value $logEntry
 
     if ($EnableDebug.IsPresent) {
-        # Controleert alleen of EnableDebug aanwezig is
         Write-Output $logEntry
     }
 }
@@ -91,6 +90,19 @@ function Update-ScriptFromGitHub {
         [string]$githubUrl = 'https://raw.githubusercontent.com/robertzijverden/HPIA/main'
     )
 
+    # Controleer of de directory van het pad bestaat, maak deze aan als dat niet zo is
+    $directory = Split-Path -Path $localPath
+    if (!(Test-Path -Path $directory)) {
+        try {
+            New-Item -ItemType Directory -Path $directory -Force | Out-Null
+            Write-Log -Message "Map ${directory} aangemaakt." -Level 'INFO'
+        }
+        catch {
+            Write-Log -Message "Fout bij het aanmaken van map ${directory}: $_" -Level 'ERROR'
+            return
+        }
+    }
+
     $url = "$githubUrl/$scriptName"
     try {
         Invoke-WebRequest -Uri $url -OutFile $localPath -UseBasicParsing -ErrorAction Stop
@@ -131,8 +143,10 @@ try {
     $requiredData = Get-RequiredScripts
 
     if ($null -ne $requiredData) {
-        # Controleer en update de vereiste scripts
+        # Controleer en update de vereiste scripts, behalve het eigen script
         foreach ($script in $requiredData.scripts) {
+            if ($script.name -eq 'HealthChecker.ps1') { continue }
+
             $scriptName = $script.name
             $requiredVersion = $script.version
             $localPath = "C:\ProgramData\AutoUpdate\HPIA\$scriptName"
@@ -162,10 +176,10 @@ try {
         }
     }
 
-    # Controleer en update het eigen script
+    # Controleer en update het eigen script (HealthChecker.ps1)
     $ownScriptName = 'HealthChecker.ps1'
     $ownScriptPath = $PSCommandPath
-    $ownVersion = '1.2.2'  # Zorg ervoor dat dit de huidige versie is van het script zelf
+    $ownVersion = '2.3.0'  # Zorg ervoor dat dit de huidige versie is van het script zelf
 
     # Controleer of het eigen script ook in de vereiste scripts lijst staat voor updates
     $ownScript = $requiredData.scripts | Where-Object { $_.name -eq $ownScriptName }
