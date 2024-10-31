@@ -1,4 +1,4 @@
-# Versie: 1.2.0
+# Versie: 1.2.1
 
 param (
     [string]$logPath = 'C:\ProgramData\AutoUpdate\HPIA\HealthCheck.log',
@@ -17,9 +17,10 @@ function Write-Log {
 
     $dateTime = Get-Date -Format 'yyyy-MM-dd,HH:mm:ss'
     $logEntry = "$dateTime,$Level,HealthCheck,$Message"
-    $logEntry | Out-File -FilePath $logPath -Append -Encoding utf8
+    Add-Content -Path $logPath -Value $logEntry  # Alleen het logbericht wordt hier weggeschreven
 
-    if ($EnableDebug) {
+    if ($EnableDebug.IsPresent) {
+        # Controleert alleen of EnableDebug aanwezig is
         Write-Output $logEntry
     }
 }
@@ -164,7 +165,7 @@ try {
     # Controleer en update het eigen script
     $ownScriptName = 'HealthChecker.ps1'
     $ownScriptPath = $PSCommandPath
-    $ownVersion = '1.2.0'  # Zorg ervoor dat dit de huidige versie is van het script zelf
+    $ownVersion = '1.2.1'  # Zorg ervoor dat dit de huidige versie is van het script zelf
 
     # Controleer of het eigen script ook in de vereiste scripts lijst staat voor updates
     $ownScript = $requiredData.scripts | Where-Object { $_.name -eq $ownScriptName }
