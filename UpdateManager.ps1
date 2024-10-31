@@ -1,3 +1,5 @@
+# Versie: 1.0.0
+
 param (
     [string]$OldScriptPath,
     [string]$NewScriptPath
