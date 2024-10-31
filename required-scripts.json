@@ -7,6 +7,10 @@
     {
       "name": "HPIAUpdate.ps1",
       "version": "2.1.0"
+    },
+    {
+      "name": "HealthCheck.ps1",
+      "version": "1.0.1"
     }
   ],
   "remove": [
