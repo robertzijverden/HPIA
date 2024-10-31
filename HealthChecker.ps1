@@ -1,5 +1,4 @@
-# Versie: 1.0.1
-$ownVersion = '1.0.1'    
+# Versie: 1.2.0
 
 param (
     [string]$logPath = 'C:\ProgramData\AutoUpdate\HPIA\HealthCheck.log',
@@ -162,40 +161,42 @@ try {
         }
     }
 
+    # Controleer en update het eigen script
+    $ownScriptName = 'HealthChecker.ps1'
+    $ownScriptPath = $PSCommandPath
+    $ownVersion = '1.2.0'  # Zorg ervoor dat dit de huidige versie is van het script zelf
+
+    # Controleer of het eigen script ook in de vereiste scripts lijst staat voor updates
+    $ownScript = $requiredData.scripts | Where-Object { $_.name -eq $ownScriptName }
+    if ($null -ne $ownScript) {
+        $requiredVersion = $ownScript.version
+        
+        # Vergelijk de huidige versie van het script met de vereiste versie
+        if ([Version]$ownVersion -lt [Version]$requiredVersion) {
+            Write-Log -Message "Eigen script is verouderd. Vereiste versie: $requiredVersion." -Level 'WARNING'
+            
+            if ($autoUpdateEnabled) {
+                $tempPath = "C:\ProgramData\AutoUpdate\HPIA\Temp\$ownScriptName"
+                
+                # Download de nieuwe versie naar een tijdelijke locatie
+                Update-ScriptFromGitHub -scriptName $ownScriptName -localPath $tempPath
+                
+                # Start het bijgewerkte script en sluit het huidige script af
+                Write-Log -Message "Start bijgewerkte versie van $ownScriptName." -Level 'INFO'
+                Start-Process -FilePath 'powershell.exe' -ArgumentList "-File `"$tempPath`""
+                exit
+            }
+            else {
+                Write-Log -Message "Auto-update is uitgeschakeld, update niet uitgevoerd voor $ownScriptName." -Level 'INFO'
+            }
+        }
+        else {
+            Write-Log -Message "$ownScriptName is up-to-date met versie $ownVersion." -Level 'INFO'
+        }
+    }
+
     Write-Log -Message 'Health-check voltooid.' -Level 'INFO'
 }
 catch {
     Write-Log -Message "Fout tijdens health-check: $_" -Level 'ERROR'
-}
-# Controleer en update het eigen script
-$ownScriptName = 'HealthCheck.ps1'
-$ownScriptPath = $PSCommandPath
-
-# Controleer of dit script ook in de vereiste scripts lijst staat voor updates
-$ownScript = $requiredData.scripts | Where-Object { $_.name -eq $ownScriptName }
-if ($null -ne $ownScript) {
-    $requiredVersion = $ownScript.version
-    
-    # Vergelijk de huidige versie van het script met de vereiste versie
-    if ([Version]$ownVersion -lt [Version]$requiredVersion) {
-        Write-Log -Message "Eigen script is verouderd. Vereiste versie: $requiredVersion." -Level 'WARNING'
-        
-        if ($autoUpdateEnabled) {
-            $tempPath = "C:\ProgramData\AutoUpdate\HPIA\Temp\$ownScriptName"
-            
-            # Download de nieuwe versie naar een tijdelijke locatie
-            Update-ScriptFromGitHub -scriptName $ownScriptName -localPath $tempPath
-            
-            # Start het bijgewerkte script en sluit het huidige script af
-            Write-Log -Message "Start bijgewerkte versie van $ownScriptName." -Level 'INFO'
-            Start-Process -FilePath 'powershell.exe' -ArgumentList "-File `"$tempPath`""
-            exit
-        }
-        else {
-            Write-Log -Message "Auto-update is uitgeschakeld, update niet uitgevoerd voor $ownScriptName." -Level 'INFO'
-        }
-    }
-    else {
-        Write-Log -Message "$ownScriptName is up-to-date met versie $ownVersion." -Level 'INFO'
-    }
 }
