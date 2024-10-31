@@ -1,10 +1,16 @@
-# Versie: 2.3.1
+# Versie: 3.0.0
 
 param (
-    [string]$logPath = 'C:\ProgramData\AutoUpdate\HPIA\HealthCheck.log',
-    [switch]$EnableDebug
+    [switch]$FinalizeUpdate  # Wordt gebruikt door het oude script om de nieuwe versie te activeren
 )
 
+$scriptName = 'HealthChecker.ps1'
+$oldScriptName = 'HealthChecker_old.ps1'
+$scriptFolder = 'C:\ProgramData\AutoUpdate\HPIA'
+$scriptPath = Join-Path -Path $scriptFolder -ChildPath $scriptName
+$oldScriptPath = Join-Path -Path $scriptFolder -ChildPath $oldScriptName
+$tempScriptPath = Join-Path -Path $scriptFolder -ChildPath 'HealthChecker_temp.ps1'
+$logPath = Join-Path -Path $scriptFolder -ChildPath 'HealthCheck.log'
 $ErrorActionPreference = 'Stop'
 
 # Functie om logberichten te schrijven
@@ -14,204 +20,76 @@ function Write-Log {
         [ValidateSet('INFO', 'WARNING', 'ERROR')]
         [string]$Level = 'INFO'
     )
-
+    
     $dateTime = Get-Date -Format 'yyyy-MM-dd,HH:mm:ss'
     $logEntry = "$dateTime,$Level,HealthCheck,$Message"
     Add-Content -Path $logPath -Value $logEntry
-
-    if ($EnableDebug.IsPresent) {
-        Write-Output $logEntry
-    }
+    Write-Output $logEntry
 }
 
-# Functie om te controleren of AutoUpdate ingeschakeld is in het register
-function Is-AutoUpdateEnabled {
-    param (
-        [string]$registryPath = 'HKLM:\SOFTWARE\AutoUpdate\HPIA'
-    )
-        
+# Controleer of het script de nieuwe versie moet activeren en het oude script moet verwijderen
+if ($FinalizeUpdate) {
     try {
-        $autoUpdate = (Get-ItemProperty -Path $registryPath -Name 'Autoupdate' -ErrorAction Stop).Autoupdate
-        return $autoUpdate -eq 'Enabled'
+        # Hernoem het nieuwe script naar de standaard naam
+        Rename-Item -Path $tempScriptPath -NewName $scriptName -Force
+        Write-Log -Message "Nieuwe versie hernoemd naar $scriptName." -Level 'INFO'
+
+        # Start de nieuwe versie van het script
+        Start-Process -FilePath 'powershell.exe' -ArgumentList "-File `"$scriptPath`""
+
+        # Verwijder het oude script na het opstarten van de nieuwe versie
+        Remove-Item -Path $oldScriptPath -Force
+        Write-Log -Message "Oude versie $oldScriptPath succesvol verwijderd." -Level 'INFO'
+        exit
     }
     catch {
-        Write-Log -Message "Fout bij lezen van AutoUpdate instelling uit het register: $_" -Level 'ERROR'
-        return $false
+        Write-Log -Message "Fout bij het finaliseren van de update: $_" -Level 'ERROR'
+        exit
     }
 }
 
-# Functie om de versie te controleren in het scriptbestand
-function Get-ScriptVersion {
-    param (
-        [string]$filePath
-    )
-        
-    if (Test-Path -Path $filePath) {
-        $content = Get-Content -Path $filePath -ErrorAction Stop
-        $versionLine = $content | Select-String -Pattern '^# Versie: (\d+\.\d+\.\d+)' | Select-Object -First 1 | ForEach-Object { $_.Matches[0].Groups[1].Value }
-            
-        if ($versionLine) {
-            Write-Log -Message "Versie $versionLine gevonden in $filePath." -Level 'INFO'
-            return $versionLine
-        }
-        else {
-            Write-Log -Message "Geen versieregel gevonden in $filePath." -Level 'WARNING'
-            return $null
-        }
+# Download en controleer of een update nodig is
+$githubUrl = 'https://raw.githubusercontent.com/robertzijverden/HPIA/main'
+$currentVersion = '1.0.0'  # Versie van het huidige script
+$requiredVersion = '1.1.0'  # Versie die we willen checken
+
+function Get-RequiredVersion {
+    try {
+        $requiredData = Invoke-WebRequest -Uri "$githubUrl/required-scripts.json" -UseBasicParsing | ConvertFrom-Json
+        $scriptInfo = $requiredData.scripts | Where-Object { $_.name -eq $scriptName }
+        return $scriptInfo.version
     }
-    else {
-        Write-Log -Message "Bestand $filePath niet gevonden." -Level 'ERROR'
+    catch {
+        Write-Log -Message "Fout bij het ophalen van de vereiste versie: $_" -Level 'ERROR'
         return $null
     }
 }
 
-# Functie om de vereiste scripts van GitHub te lezen
-function Get-RequiredScripts {
-    param (
-        [string]$githubUrl = 'https://raw.githubusercontent.com/robertzijverden/HPIA/main/required-scripts.json'
-    )
-
+# Controleer of een update nodig is
+$requiredVersion = Get-RequiredVersion
+if ([Version]$currentVersion -lt [Version]$requiredVersion) {
+    Write-Log -Message "$scriptName is verouderd. Bijwerken naar versie $requiredVersion." -Level 'WARNING'
+    
     try {
-        $content = Invoke-WebRequest -Uri $githubUrl -UseBasicParsing -ErrorAction Stop | ConvertFrom-Json
-        Write-Log -Message 'Lijst met vereiste scripts succesvol opgehaald.' -Level 'INFO'
-        return $content
+        # Hernoem het huidige script naar de oude versie
+        Rename-Item -Path $scriptPath -NewName $oldScriptName -Force
+        Write-Log -Message "Oude versie hernoemd naar $oldScriptName." -Level 'INFO'
+
+        # Download het nieuwe script naar een tijdelijke locatie
+        Invoke-WebRequest -Uri "$githubUrl/$scriptName" -OutFile $tempScriptPath -UseBasicParsing
+        Write-Log -Message "Nieuwe versie gedownload naar $tempScriptPath." -Level 'INFO'
+        
+        # Start de oude versie van het script met de parameter om de update af te ronden
+        Start-Process -FilePath 'powershell.exe' -ArgumentList "-File `"$oldScriptPath`" -FinalizeUpdate"
+        exit
     }
     catch {
-        Write-Log -Message "Fout bij ophalen van de vereiste scripts lijst vanaf GitHub: $_" -Level 'ERROR'
-        return $null
+        Write-Log -Message "Fout bij het downloaden of voorbereiden van de update: $_" -Level 'ERROR'
+        exit
     }
 }
-
-# Functie om het script te downloaden van GitHub en lokaal op te slaan
-function Update-ScriptFromGitHub {
-    param (
-        [string]$scriptName,
-        [string]$localPath,
-        [string]$githubUrl = 'https://raw.githubusercontent.com/robertzijverden/HPIA/main'
-    )
-
-    # Controleer of de directory van het pad bestaat, maak deze aan als dat niet zo is
-    $directory = Split-Path -Path $localPath
-    if (!(Test-Path -Path $directory)) {
-        try {
-            New-Item -ItemType Directory -Path $directory -Force | Out-Null
-            Write-Log -Message "Map ${directory} aangemaakt." -Level 'INFO'
-        }
-        catch {
-            Write-Log -Message "Fout bij het aanmaken van map ${directory}: $_" -Level 'ERROR'
-            return
-        }
-    }
-
-    $url = "$githubUrl/$scriptName"
-    try {
-        Invoke-WebRequest -Uri $url -OutFile $localPath -UseBasicParsing -ErrorAction Stop
-        Write-Log -Message "Bestand $scriptName succesvol bijgewerkt naar de nieuwste versie vanaf GitHub." -Level 'INFO'
-    }
-    catch {
-        Write-Log -Message "Fout bij downloaden van $scriptName vanaf GitHub: $_" -Level 'ERROR'
-    }
+else {
+    Write-Log -Message "$scriptName is up-to-date met versie $currentVersion." -Level 'INFO'
 }
 
-# Functie om overbodige bestanden te verwijderen
-function Remove-UnnecessaryFiles {
-    param (
-        [array]$filesToRemove,
-        [string]$directory = 'C:\ProgramData\AutoUpdate\HPIA'
-    )
-        
-    foreach ($file in $filesToRemove) {
-        $filePath = Join-Path -Path $directory -ChildPath $file
-        if (Test-Path -Path $filePath) {
-            try {
-                Remove-Item -Path $filePath -Force -ErrorAction Stop
-                Write-Log -Message "Bestand $file succesvol verwijderd." -Level 'INFO'
-            }
-            catch {
-                Write-Log -Message "Fout bij verwijderen van $file $_" -Level 'ERROR'
-            }
-        }
-        else {
-            Write-Log -Message "Bestand $file niet gevonden. Geen verwijdering nodig." -Level 'INFO'
-        }
-    }
-}
-
-# Hoofdscript
-try {
-    $autoUpdateEnabled = Is-AutoUpdateEnabled
-    $requiredData = Get-RequiredScripts
-
-    if ($null -ne $requiredData) {
-        # Controleer en update de vereiste scripts, behalve het eigen script
-        foreach ($script in $requiredData.scripts) {
-            if ($script.name -eq 'HealthChecker.ps1') { continue }
-
-            $scriptName = $script.name
-            $requiredVersion = $script.version
-            $localPath = "C:\ProgramData\AutoUpdate\HPIA\$scriptName"
-                
-            # Haal de lokale versie uit het scriptbestand op
-            $localVersion = Get-ScriptVersion -filePath $localPath
-                
-            # Controleer of het script ontbreekt of verouderd is
-            if ($null -eq $localVersion -or ([Version]$localVersion -lt [Version]$requiredVersion)) {
-                Write-Log -Message "Bestand $scriptName ontbreekt of is verouderd. Vereiste versie: $requiredVersion." -Level 'WARNING'
-                    
-                if ($autoUpdateEnabled) {
-                    Update-ScriptFromGitHub -scriptName $scriptName -localPath $localPath
-                }
-                else {
-                    Write-Log -Message "Auto-update is uitgeschakeld, update niet uitgevoerd voor $scriptName." -Level 'INFO'
-                }
-            }
-            else {
-                Write-Log -Message "$scriptName is up-to-date met versie $localVersion." -Level 'INFO'
-            }
-        }
-
-        # Verwijder overbodige bestanden indien gespecificeerd in de verwijderlijst
-        if ($autoUpdateEnabled -and $requiredData.remove) {
-            Remove-UnnecessaryFiles -filesToRemove $requiredData.remove
-        }
-    }
-
-    # Controleer en update het eigen script (HealthChecker.ps1)
-    $ownScriptName = 'HealthChecker.ps1'
-    $ownScriptPath = $PSCommandPath
-    $ownVersion = '2.3.1'  # Zorg ervoor dat dit de huidige versie is van het script zelf
-
-    # Controleer of het eigen script ook in de vereiste scripts lijst staat voor updates
-    $ownScript = $requiredData.scripts | Where-Object { $_.name -eq $ownScriptName }
-    if ($null -ne $ownScript) {
-        $requiredVersion = $ownScript.version
-        
-        # Vergelijk de huidige versie van het script met de vereiste versie
-        if ([Version]$ownVersion -lt [Version]$requiredVersion) {
-            Write-Log -Message "Eigen script is verouderd. Vereiste versie: $requiredVersion." -Level 'WARNING'
-            
-            if ($autoUpdateEnabled) {
-                $tempPath = "C:\ProgramData\AutoUpdate\HPIA\Temp\$ownScriptName"
-                
-                # Download de nieuwe versie naar een tijdelijke locatie
-                Update-ScriptFromGitHub -scriptName $ownScriptName -localPath $tempPath
-                
-                # Start het bijgewerkte script en sluit het huidige script af
-                Write-Log -Message "Start bijgewerkte versie van $ownScriptName." -Level 'INFO'
-                Start-Process -FilePath 'powershell.exe' -ArgumentList "-File `"$tempPath`""
-                exit
-            }
-            else {
-                Write-Log -Message "Auto-update is uitgeschakeld, update niet uitgevoerd voor $ownScriptName." -Level 'INFO'
-            }
-        }
-        else {
-            Write-Log -Message "$ownScriptName is up-to-date met versie $ownVersion." -Level 'INFO'
-        }
-    }
-
-    Write-Log -Message 'Health-check voltooid.' -Level 'INFO'
-}
-catch {
-    Write-Log -Message "Fout tijdens health-check: $_" -Level 'ERROR'
-}
+Write-Log -Message 'Health-check voltooid.' -Level 'INFO'
