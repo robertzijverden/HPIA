@@ -1,4 +1,4 @@
-# Versie: 2.3.0
+# Versie: 2.3.1
 
 param (
     [string]$logPath = 'C:\ProgramData\AutoUpdate\HPIA\HealthCheck.log',
@@ -179,7 +179,7 @@ try {
     # Controleer en update het eigen script (HealthChecker.ps1)
     $ownScriptName = 'HealthChecker.ps1'
     $ownScriptPath = $PSCommandPath
-    $ownVersion = '2.3.0'  # Zorg ervoor dat dit de huidige versie is van het script zelf
+    $ownVersion = '2.3.1'  # Zorg ervoor dat dit de huidige versie is van het script zelf
 
     # Controleer of het eigen script ook in de vereiste scripts lijst staat voor updates
     $ownScript = $requiredData.scripts | Where-Object { $_.name -eq $ownScriptName }
