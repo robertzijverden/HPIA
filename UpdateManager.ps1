@@ -1,4 +1,4 @@
-# Versie: 1.0.0
+# Versie: 1.1.0
 
 param (
     [string]$OldScriptPath,
