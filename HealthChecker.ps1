@@ -1,17 +1,15 @@
-# Versie: 3.0.0
+# Versie: 1.0.0
 
-param (
-    [switch]$FinalizeUpdate  # Wordt gebruikt door het oude script om de nieuwe versie te activeren
-)
-
-$scriptName = 'HealthChecker.ps1'
-$oldScriptName = 'HealthChecker_old.ps1'
-$scriptFolder = 'C:\ProgramData\AutoUpdate\HPIA'
+$scriptName = "HealthChecker.ps1"
+$tempScriptName = "HealthChecker_new.ps1"
+$updateManagerScript = "UpdateManager.ps1"
+$scriptFolder = "C:\ProgramData\AutoUpdate\HPIA"
 $scriptPath = Join-Path -Path $scriptFolder -ChildPath $scriptName
-$oldScriptPath = Join-Path -Path $scriptFolder -ChildPath $oldScriptName
-$tempScriptPath = Join-Path -Path $scriptFolder -ChildPath 'HealthChecker_temp.ps1'
-$logPath = Join-Path -Path $scriptFolder -ChildPath 'HealthCheck.log'
+$tempScriptPath = Join-Path -Path $scriptFolder -ChildPath $tempScriptName
+$updateManagerPath = Join-Path -Path $scriptFolder -ChildPath $updateManagerScript
+$logPath = Join-Path -Path $scriptFolder -ChildPath "HealthCheck.log"
 $ErrorActionPreference = 'Stop'
+$githubUrl = 'https://raw.githubusercontent.com/robertzijverden/HPIA/main'
 
 # Functie om logberichten te schrijven
 function Write-Log {
@@ -27,32 +25,20 @@ function Write-Log {
     Write-Output $logEntry
 }
 
-# Controleer of het script de nieuwe versie moet activeren en het oude script moet verwijderen
-if ($FinalizeUpdate) {
+# Functie om de huidige versie van dit script op te halen
+function Get-CurrentVersion {
     try {
-        # Hernoem het nieuwe script naar de standaard naam
-        Rename-Item -Path $tempScriptPath -NewName $scriptName -Force
-        Write-Log -Message "Nieuwe versie hernoemd naar $scriptName." -Level 'INFO'
-
-        # Start de nieuwe versie van het script
-        Start-Process -FilePath 'powershell.exe' -ArgumentList "-File `"$scriptPath`""
-
-        # Verwijder het oude script na het opstarten van de nieuwe versie
-        Remove-Item -Path $oldScriptPath -Force
-        Write-Log -Message "Oude versie $oldScriptPath succesvol verwijderd." -Level 'INFO'
-        exit
+        $content = Get-Content -Path $scriptPath -ErrorAction Stop
+        $versionLine = $content | Select-String -Pattern '^# Versie: (\d+\.\d+\.\d+)' | Select-Object -First 1 | ForEach-Object { $_.Matches[0].Groups[1].Value }
+        return $versionLine
     }
     catch {
-        Write-Log -Message "Fout bij het finaliseren van de update: $_" -Level 'ERROR'
-        exit
+        Write-Log -Message "Fout bij het lezen van de huidige versie: $_" -Level 'ERROR'
+        return $null
     }
 }
 
-# Download en controleer of een update nodig is
-$githubUrl = 'https://raw.githubusercontent.com/robertzijverden/HPIA/main'
-$currentVersion = '1.0.0'  # Versie van het huidige script
-$requiredVersion = '1.1.0'  # Versie die we willen checken
-
+# Functie om de vereiste versie van GitHub te verkrijgen
 function Get-RequiredVersion {
     try {
         $requiredData = Invoke-WebRequest -Uri "$githubUrl/required-scripts.json" -UseBasicParsing | ConvertFrom-Json
@@ -65,22 +51,26 @@ function Get-RequiredVersion {
     }
 }
 
-# Controleer of een update nodig is
+# Ophalen van de huidige en vereiste versie
+$currentVersion = Get-CurrentVersion
 $requiredVersion = Get-RequiredVersion
+
+if ($null -eq $currentVersion -or $null -eq $requiredVersion) {
+    Write-Log -Message "Kon versies niet verifiëren. Update geannuleerd." -Level 'ERROR'
+    exit
+}
+
+# Controleer of een update nodig is
 if ([Version]$currentVersion -lt [Version]$requiredVersion) {
     Write-Log -Message "$scriptName is verouderd. Bijwerken naar versie $requiredVersion." -Level 'WARNING'
     
     try {
-        # Hernoem het huidige script naar de oude versie
-        Rename-Item -Path $scriptPath -NewName $oldScriptName -Force
-        Write-Log -Message "Oude versie hernoemd naar $oldScriptName." -Level 'INFO'
-
-        # Download het nieuwe script naar een tijdelijke locatie
+        # Download de nieuwe versie naar een tijdelijke locatie
         Invoke-WebRequest -Uri "$githubUrl/$scriptName" -OutFile $tempScriptPath -UseBasicParsing
-        Write-Log -Message "Nieuwe versie gedownload naar $tempScriptPath." -Level 'INFO'
+        Write-Log -Message "Nieuwe versie van $scriptName gedownload naar $tempScriptPath." -Level 'INFO'
         
-        # Start de oude versie van het script met de parameter om de update af te ronden
-        Start-Process -FilePath 'powershell.exe' -ArgumentList "-File `"$oldScriptPath`" -FinalizeUpdate"
+        # Start het UpdateManager-script om de update af te ronden
+        Start-Process -FilePath 'powershell.exe' -ArgumentList "-File `"$updateManagerPath`" -OldScriptPath `"$scriptPath`" -NewScriptPath `"$tempScriptPath`""
         exit
     }
     catch {
@@ -92,4 +82,4 @@ else {
     Write-Log -Message "$scriptName is up-to-date met versie $currentVersion." -Level 'INFO'
 }
 
-Write-Log -Message 'Health-check voltooid.' -Level 'INFO'
+Write-Log -Message "Health-check voltooid." -Level 'INFO'
