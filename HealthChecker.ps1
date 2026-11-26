@@ -1,4 +1,4 @@
-# Versie: 3.1.0
+# Versie: 3.1.1
 
 $scriptName = "HealthChecker.ps1"
 $tempScriptName = "HealthChecker_new.ps1"
@@ -38,7 +38,7 @@ function Get-CurrentVersion {
             return $versionLine
         }
         catch {
-            Write-Log -Message "Fout bij het lezen van de versie uit $filePath: $_" -Level 'ERROR'
+            Write-Log -Message "Fout bij het lezen van de versie uit ${filePath}: $_" -Level 'ERROR'
             return $null
         }
     }
@@ -102,7 +102,7 @@ foreach ($script in $requiredScripts) {
             }
         }
         catch {
-            Write-Log -Message "Fout bij het downloaden of bijwerken van $scriptName: $_" -Level 'ERROR'
+            Write-Log -Message "Fout bij het downloaden of bijwerken van ${scriptName}: $_" -Level 'ERROR'
         }
     }
     else {
