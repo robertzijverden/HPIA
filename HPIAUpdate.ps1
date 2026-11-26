@@ -1,4 +1,4 @@
-# Versie: 2.2.0
+# Versie: 2.2.1
             
         # Definieer de logbestand locatie
         $logPath = 'C:/hpia/hpia_install_log.txt'
@@ -69,11 +69,15 @@
             $fileName = [System.IO.Path]::GetFileName($latestVersionLink.href)
             $downloadPath = Join-Path -Path $tempPath -ChildPath $fileName
 
-            Invoke-WebRequest -Uri $latestVersionLink.href -OutFile $downloadPath
+            Invoke-WebRequest -Uri $latestVersionLink.href -OutFile $downloadPath -UseBasicParsing
             Write-Log 'Nieuwste versie van HPIA gedownload naar tijdelijke locatie.'
 
-            $installCommand = "& `"$downloadPath`" /s /e /f c:\hpia"
-            Invoke-Expression $installCommand
+            # Wacht tot het uitpakken klaar is voordat het installatiebestand wordt verwijderd
+            $process = Start-Process -FilePath $downloadPath -ArgumentList '/s', '/e', '/f', $hpiaDirectory -Wait -PassThru
+            if ($process.ExitCode -ne 0) {
+                Write-Log "Installatie van HPIA mislukt met exitcode $($process.ExitCode)."
+                exit 1
+            }
             Write-Log 'Nieuwe versie van HPIA geinstalleerd.'
 
             Remove-Item -Path $downloadPath -Force
